@@ -1,0 +1,146 @@
+#!/bin/sh
+
+# Slackware build script for powerdevil
+
+# Copyright 2015-2017  Widya Walesa <walecha99@gmail.com>
+# All rights reserved.
+#
+# Redistribution and use of this script, with or without modification, is
+# permitted provided that the following conditions are met:
+#
+# 1. Redistributions of this script must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR ''AS IS'' AND ANY EXPRESS OR IMPLIED
+# WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+# EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+# OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+# ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. FURTHERMORE I AM NOT LIABLE IF
+# YOUR DATA IS DESTROYED, YOUR HOUSE BURNS DOWN OR YOUR DOG RUNS OFF.
+
+PRGNAM=powerdevil
+VERSION=${VERSION:-5.10.3}
+BUILD=${BUILD:-1}
+TAG=${TAG:-_wls}
+
+# This build is using ELOGIND instead of consolekit2
+USE_CONSOLEKIT2=${USE_CONSOLEKIT2:-"NO"}
+
+if [ -z "$ARCH" ]; then
+  case "$( uname -m )" in
+    i?86) ARCH=i586 ;;
+    arm*) ARCH=arm ;;
+       *) ARCH=$( uname -m ) ;;
+  esac
+fi
+
+if [ "$ARCH" = "i586" ]; then
+  SLKCFLAGS="-O2 -pipe -march=i586 -mtune=i686"
+  LIBDIRSUFFIX=""
+elif [ "$ARCH" = "i686" ]; then
+  SLKCFLAGS="-O2 -pipe -march=i686 -mtune=i686"
+  LIBDIRSUFFIX=""
+elif [ "$ARCH" = "x86_64" ]; then
+  SLKCFLAGS="-O2 -m64 -pipe -fPIC"
+  LIBDIRSUFFIX="64"
+else
+  SLKCFLAGS="-O2"
+  LIBDIRSUFFIX=""
+fi
+
+CWD=$(pwd)
+WRK=${WRK:-/tmp/wlsbuild}
+PKG=$WRK/package-$PRGNAM
+OUTPUT=${OUTPUT:-/tmp}
+DOCS="AUTHORS COPYING* ChangeLog HACKING MAINTAINERS NEWS README"
+
+rm -rf $PKG
+mkdir -p $WRK $PKG $OUTPUT
+cd $WRK
+rm -rf $PRGNAM-$VERSION
+tar xvf $CWD/$PRGNAM-$VERSION.tar.?z*
+
+cd $PRGNAM-$VERSION
+
+chown -R root:root .
+find . \
+ \( -perm 777 -o -perm 775 -o -perm 711 -o -perm 555 -o -perm 511 \) \
+ -exec chmod 755 {} \; -o \
+ \( -perm 666 -o -perm 664 -o -perm 600 -o -perm 444 -o -perm 440 -o -perm 400 \) \
+ -exec chmod 644 {} \;
+
+KDE_OPT_ARGS=" -Wno-dev -DBUILD_TESTING=OFF -DKDE4_BUILD_TESTS=OFF -DSITE=\"slackware.com\" -DKDE_DISTRIBUTION_TEXT=\"volkerdi@slackware.com\" "
+
+mkdir build
+cd build
+  cmake .. \
+    $KDE_OPT_ARGS \
+    -DKDE_PLATFORM_FEATURE_DISABLE_DEPRECATED=TRUE \
+    -DCMAKE_C_FLAGS:STRING="$SLKCFLAGS" \
+    -DCMAKE_C_FLAGS_RELEASE:STRING="$SLKCFLAGS" \
+    -DCMAKE_CXX_FLAGS:STRING="$SLKCFLAGS" \
+    -DCMAKE_CXX_FLAGS_RELEASE:STRING="$SLKCFLAGS" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DMAN_INSTALL_DIR=/usr/man \
+    -DSYSCONF_INSTALL_DIR=/etc/kde \
+    -DLIB_INSTALL_DIR=lib$LIBDIRSUFFIX \
+    -DLIB_SUFFIX=${LIBDIRSUFFIX} \
+    -DLIBEXEC_INSTALL_DIR=lib$LIBDIRSUFFIX \
+    -DQT_PLUGIN_INSTALL_DIR=lib$LIBDIRSUFFIX/qt5/plugins \
+    -DQML_INSTALL_DIR=lib$LIBDIRSUFFIX/qt5/qml \
+    -DKDE_INSTALL_USE_QT_SYS_PATHS=ON \
+    -DBUILD_TESTING=OFF \
+    -DHAVE_SHADOW=TRUE \
+    -DQca-qt5_DIR=/usr/lib${LIBDIRSUFFIX}/cmake/Qca \
+    || exit 1
+
+make || exit 1
+make DESTDIR=$PKG install || exit 1
+cd ..
+
+# Move the polkit dbus configuration files to the proper place:
+mkdir -p $PKG/etc
+mv $PKG/etc/kde/dbus-1 $PKG/etc/
+
+mkdir -p $PKG/etc/polkit-1/rules.d
+mkdir -p $PKG/etc/polkit-1/localauthority/50-local.d
+chmod 700 $PKG/etc/polkit-1/localauthority
+
+if [ "$USE_CONSOLEKIT2" == "YES" ]; then
+    # Add polkit policy file that brings back suspend/hibernate options:
+    install -m 0644 -o root \
+        $CWD/patches/10-enable-suspend.rules \
+        $PKG/etc/polkit-1/rules.d/10-enable-suspend.rules.new
+    install -m 0660 -o root \
+        $CWD/patches/30-org.freedesktop.upower.pkla \
+        $PKG/etc/polkit-1/localauthority/50-local.d/30-org.freedesktop.upower.pkla.new
+    # Add polkit policy files that bring back shutdown/reboot:
+    install -m 0660 -o root \
+        $CWD/patches/40-org.freedesktop.consolekit.system.stop-multiple-users.pkla \
+        $PKG/etc/polkit-1/localauthority/50-local.d/40-org.freedesktop.consolekit.system.stop-multiple-users.pkla.new
+    install -m 0660 -o root \
+        $CWD/patches/41-org.freedesktop.consolekit.system.restart-multiple-users.pkla \
+        $PKG/etc/polkit-1/localauthority/50-local.d/41-org.freedesktop.consolekit.system.restart-multiple-users.pkla.new
+fi
+
+find $PKG | xargs file | grep -e "executable" -e "shared object" | grep ELF \
+  | cut -f 1 -d : | xargs strip --strip-unneeded 2> /dev/null || true
+
+mkdir -p $PKG/usr/doc/$PRGNAM-$VERSION
+cp -a $DOCS $PKG/usr/doc/$PRGNAM-$VERSION
+cat $CWD/$PRGNAM.SlackBuild > $PKG/usr/doc/$PRGNAM-$VERSION/$PRGNAM.SlackBuild
+
+mkdir -p $PKG/install
+cat $CWD/slack-desc > $PKG/install/slack-desc
+
+cd $PKG
+/sbin/makepkg -p -l y -c n $OUTPUT/$PRGNAM-$VERSION-$ARCH-$BUILD$TAG.txz
+
+echo "Cleaning up build directory"
+cd $WRK; rm -rf $PRGNAM-$VERSION $PKG

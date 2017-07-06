@@ -1,0 +1,156 @@
+#!/bin/sh
+
+# Slackware build script for sddm
+
+# Copyright 2015-2017  Widya Walesa <walecha99@gmail.com>
+# All rights reserved.
+#
+# Redistribution and use of this script, with or without modification, is
+# permitted provided that the following conditions are met:
+#
+# 1. Redistributions of this script must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR ''AS IS'' AND ANY EXPRESS OR IMPLIED
+# WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+# EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+# OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+# ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. FURTHERMORE I AM NOT LIABLE IF
+# YOUR DATA IS DESTROYED, YOUR HOUSE BURNS DOWN OR YOUR DOG RUNS OFF.
+
+PRGNAM=sddm-qt5
+SRCNAM=sddm
+VERSION=${VERSION:-0.14.0}
+BUILD=${BUILD:-1}
+TAG=${TAG:-_wls}
+
+if [ -z "$ARCH" ]; then
+  case "$( uname -m )" in
+    i?86) ARCH=i586 ;;
+    arm*) ARCH=arm ;;
+       *) ARCH=$( uname -m ) ;;
+  esac
+fi
+
+if [ "$ARCH" = "i586" ]; then
+  SLKCFLAGS="-O2 -pipe -march=i586 -mtune=i686"
+  LIBDIRSUFFIX=""
+elif [ "$ARCH" = "i686" ]; then
+  SLKCFLAGS="-O2 -pipe -march=i686 -mtune=i686"
+  LIBDIRSUFFIX=""
+elif [ "$ARCH" = "x86_64" ]; then
+  SLKCFLAGS="-O2 -m64 -pipe -fPIC"
+  LIBDIRSUFFIX="64"
+else
+  SLKCFLAGS="-O2"
+  LIBDIRSUFFIX=""
+fi
+
+CWD=$(pwd)
+WRK=${WRK:-/tmp/wlsbuild}
+PKG=$WRK/package-$PRGNAM
+OUTPUT=${OUTPUT:-/tmp}
+DOCS="AUTHORS COPYING* ChangeLog HACKING MAINTAINERS NEWS README"
+
+rm -rf $PKG
+mkdir -p $WRK $PKG $OUTPUT
+cd $WRK
+rm -rf $SRCNAM-$VERSION
+tar xvf $CWD/$SRCNAM-$VERSION.tar.?z*
+
+cd $SRCNAM-$VERSION
+
+# Add missing consolekit support
+# (brings back the switch_user functionality in KDE):
+echo "===> Apply patch: sddm_consolekit.diff"
+cat $CWD/patches/sddm_consolekit.diff | patch -p1 || exit 1
+
+# SDDM 0.14 sources $HOME/.xsession which in Slackware will override the
+# session selection you make in SDDM. We fix that unwanted side effect by
+# reverting the change:
+echo "===> Apply patch: sddm_userxsession.diff"
+cat $CWD/patches/sddm_userxsession.diff | patch -p1 || exit 1
+
+# Fix display of user avatars ($HOME/.face.icon file)
+# (fixed in sddm-0.15.0).
+echo "===> Apply patch: sddm_avatars.patch"
+cat $CWD/patches/sddm_avatars.patch | patch -p1 || exit 1
+
+# Add elogind support
+echo "===> Apply patch: sddm-enable-elogind.patch"
+cat $CWD/patches/sddm-enable-elogind.patch | patch -p1 || exit 1
+
+# Add the dutch translation:
+if ! grep -q nl.ts data/translations/CMakeLists.txt ; then
+  sed -e '/set(TRANSLATION_FILES/s/TRANSLATION_FILES/&\n    nl.ts/' \
+      -i data/translations/CMakeLists.txt
+fi
+
+chown -R root:root .
+find . \
+ \( -perm 777 -o -perm 775 -o -perm 711 -o -perm 555 -o -perm 511 \) \
+ -exec chmod 755 {} \; -o \
+ \( -perm 666 -o -perm 664 -o -perm 600 -o -perm 444 -o -perm 440 -o -perm 400 \) \
+ -exec chmod 644 {} \;
+
+mkdir -p build
+cd build
+  cmake .. \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_FLAGS:STRING="$SLKCFLAGS" \
+    -DCMAKE_C_FLAGS_RELEASE:STRING="$SLKCFLAGS" \
+    -DCMAKE_CXX_FLAGS:STRING="$SLKCFLAGS" \
+    -DCMAKE_CXX_FLAGS_RELEASE:STRING="$SLKCFLAGS" \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DLIB_SUFFIX=${LIBDIRSUFFIX} \
+    -DUSE_QT4:BOOL=FALSE \
+    -DUSE_QT5:BOOL=TRUE \
+    -DENABLE_PAM:BOOL=TRUE \
+    -DNO_SYSTEMD:BOOL=TRUE \
+    -DENABLE_JOURNALD:BOOL=OFF \
+    -DUSE_ELOGIND:BOOL=TRUE \
+    || exit 1
+
+make || exit 1
+make DESTDIR=$PKG install || exit 1
+cd ..
+
+# Remove the sddm.conf file because we will generate our own in doinst.sh:
+rm -f $PKG/etc/sddm.conf
+
+# Add a wrapper for the sddm binary, to enable a custom environment:
+mv $PKG/usr/bin/sddm $PKG/usr/bin/sddm.bin
+cat <<"EOT" > $PKG/usr/bin/sddm
+#!/bin/sh
+# Customized environment (LANG definition):
+if [ -f /etc/default/sddm ]; then
+  . /etc/default/sddm
+fi
+/usr/bin/sddm.bin "$*"
+EOT
+chmod 0755 $PKG/usr/bin/sddm
+
+# Let's also add an example customization (localization of the UI):
+mkdir -p  $PKG/etc/default
+echo ". /etc/profile.d/lang.sh" >  $PKG/etc/default/sddm.new
+
+find $PKG | xargs file | grep -e "executable" -e "shared object" | grep ELF \
+  | cut -f 1 -d : | xargs strip --strip-unneeded 2> /dev/null || true
+
+mkdir -p $PKG/usr/doc/$PRGNAM-$VERSION
+cp -a $DOCS $PKG/usr/doc/$PRGNAM-$VERSION
+cat $CWD/$PRGNAM.SlackBuild > $PKG/usr/doc/$PRGNAM-$VERSION/$PRGNAM.SlackBuild
+
+mkdir -p $PKG/install
+cat $CWD/slack-desc > $PKG/install/slack-desc
+
+cd $PKG
+/sbin/makepkg -p -l y -c n $OUTPUT/$PRGNAM-$VERSION-$ARCH-$BUILD$TAG.txz
+
+echo "Cleaning up build directory"
+cd $WRK; rm -rf $SRCNAM-$VERSION $PKG

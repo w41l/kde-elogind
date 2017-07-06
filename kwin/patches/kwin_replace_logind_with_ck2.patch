@@ -1,0 +1,85 @@
+From: Eric Koegel <eric.koegel@gmail.com>
+Date: Sun, 24 Jul 2016 14:37:26 +0300
+
+Trivial patch for testing the CK2 session controller interface
+as a replacement for systemd-logind;
+Eric Koegel's original patch was rebased to kwin-5.10.2 by Eric Hameleers
+
+diff -uar kwin-5.10.2.orig/logind.cpp kwin-5.10.2/logind.cpp
+--- kwin-5.10.2.orig/logind.cpp	2017-06-13 20:19:37.000000000 +0200
++++ kwin-5.10.2/logind.cpp	2017-06-18 20:49:56.018661568 +0200
+@@ -58,10 +58,10 @@
+ namespace KWin
+ {
+ 
+-const static QString s_login1Service = QStringLiteral("org.freedesktop.login1");
+-const static QString s_login1Path = QStringLiteral("/org/freedesktop/login1");
+-const static QString s_login1ManagerInterface = QStringLiteral("org.freedesktop.login1.Manager");
+-const static QString s_login1SessionInterface = QStringLiteral("org.freedesktop.login1.Session");
++const static QString s_login1Service = QStringLiteral("org.freedesktop.ConsoleKit");
++const static QString s_login1Path = QStringLiteral("/org/freedesktop/ConsoleKit/Manager");
++const static QString s_login1ManagerInterface = QStringLiteral("org.freedesktop.ConsoleKit.Manager");
++const static QString s_login1SessionInterface = QStringLiteral("org.freedesktop.ConsoleKit.Session");
+ const static QString s_dbusPropertiesInterface = QStringLiteral("org.freedesktop.DBus.Properties");
+ 
+ LogindIntegration *LogindIntegration::s_self = nullptr;
+@@ -151,7 +151,7 @@
+                 return;
+             }
+             if (!reply.isValid()) {
+-                qCDebug(KWIN_CORE) << "The session is not registered with logind" << reply.error().message();
++                qCDebug(KWIN_CORE) << "The session is not registered with ConsoleKit2" << reply.error().message();
+                 return;
+             }
+             m_sessionPath = reply.value().path();
+@@ -199,7 +199,7 @@
+                                                           m_sessionPath,
+                                                           s_dbusPropertiesInterface,
+                                                           QStringLiteral("Get"));
+-    message.setArguments(QVariantList({s_login1SessionInterface, QStringLiteral("Active")}));
++    message.setArguments(QVariantList({s_login1SessionInterface, QStringLiteral("active")}));
+     QDBusPendingReply<QVariant> reply = m_bus.asyncCall(message);
+     QDBusPendingCallWatcher *watcher = new QDBusPendingCallWatcher(reply, this);
+     connect(watcher, &QDBusPendingCallWatcher::finished, this,
+@@ -207,7 +207,7 @@
+             QDBusPendingReply<QVariant> reply = *self;
+             self->deleteLater();
+             if (!reply.isValid()) {
+-                qCDebug(KWIN_CORE) << "Failed to get Active Property of logind session:" << reply.error().message();
++                qCDebug(KWIN_CORE) << "Failed to get Active Property of ConsoleKit2 session:" << reply.error().message();
+                 return;
+             }
+             const bool active = reply.value().toBool();
+@@ -236,7 +236,7 @@
+             QDBusPendingReply<QVariant> reply = *self;
+             self->deleteLater();
+             if (!reply.isValid()) {
+-                qCDebug(KWIN_CORE) << "Failed to get VTNr Property of logind session:" << reply.error().message();
++                qCDebug(KWIN_CORE) << "Failed to get VTNr Property of ConsoleKit2 session:" << reply.error().message();
+                 return;
+             }
+             const int vt = reply.value().toUInt();
+@@ -365,12 +365,12 @@
+             QDBusPendingReply<QVariant> reply = *self;
+             self->deleteLater();
+             if (!reply.isValid()) {
+-                qCDebug(KWIN_CORE) << "Failed to get Seat Property of logind session:" << reply.error().message();
++                qCDebug(KWIN_CORE) << "Failed to get Seat Property of ConsoleKit2 session:" << reply.error().message();
+                 return;
+             }
+             DBusLogindSeat seat = qdbus_cast<DBusLogindSeat>(reply.value().value<QDBusArgument>());
+             const QString seatPath = seat.path.path();
+-            qCDebug(KWIN_CORE) << "Logind seat:" << seat.name << "/" << seatPath;
++            qCDebug(KWIN_CORE) << "ConsoleKit2 seat:" << seat.name << "/" << seatPath;
+             if (m_seatPath != seatPath) {
+                 m_seatPath = seatPath;
+             }
+@@ -385,7 +385,7 @@
+     }
+     QDBusMessage message = QDBusMessage::createMethodCall(s_login1Service,
+                                                           m_seatPath,
+-                                                          QStringLiteral("org.freedesktop.login1.Seat"),
++                                                          QStringLiteral("org.freedesktop.ConsoleKit.Seat"),
+                                                           QStringLiteral("SwitchTo"));
+     message.setArguments(QVariantList{vtNr});
+     m_bus.asyncCall(message);

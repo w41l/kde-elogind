@@ -1,0 +1,24 @@
+# Move the polkit dbus configuration files to the proper place:
+mkdir -p $PKG/etc
+mv $PKG/etc/kde/dbus-1 $PKG/etc/
+
+mkdir -p $PKG/etc/polkit-1/rules.d
+mkdir -p $PKG/etc/polkit-1/localauthority/50-local.d
+chmod 700 $PKG/etc/polkit-1/localauthority
+
+if [ "$USE_CONSOLEKIT2" == "YES" ]; then
+    # Add polkit policy file that brings back suspend/hibernate options:
+    install -m 0644 -o root \
+        $CWD/patches/10-enable-suspend.rules \
+        $PKG/etc/polkit-1/rules.d/10-enable-suspend.rules.new
+    install -m 0660 -o root \
+        $CWD/patches/30-org.freedesktop.upower.pkla \
+        $PKG/etc/polkit-1/localauthority/50-local.d/30-org.freedesktop.upower.pkla.new
+    # Add polkit policy files that bring back shutdown/reboot:
+    install -m 0660 -o root \
+        $CWD/patches/40-org.freedesktop.consolekit.system.stop-multiple-users.pkla \
+        $PKG/etc/polkit-1/localauthority/50-local.d/40-org.freedesktop.consolekit.system.stop-multiple-users.pkla.new
+    install -m 0660 -o root \
+        $CWD/patches/41-org.freedesktop.consolekit.system.restart-multiple-users.pkla \
+        $PKG/etc/polkit-1/localauthority/50-local.d/41-org.freedesktop.consolekit.system.restart-multiple-users.pkla.new
+fi

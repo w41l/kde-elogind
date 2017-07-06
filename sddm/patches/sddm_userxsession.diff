@@ -1,0 +1,13 @@
+--- sddm-0.14.0/data/scripts/Xsession.orig	2016-08-28 13:54:03.000000000 +0200
++++ sddm-0.14.0/data/scripts/Xsession	2016-11-06 21:35:43.183138893 +0100
+@@ -84,10 +84,6 @@
+ fi
+ [ -f $HOME/.Xresources ] && xrdb -merge $HOME/.Xresources
+ 
+-if [ -f "$USERXSESSION" ]; then
+-  . "$USERXSESSION"
+-fi
+-
+ if [ -z "$@" ]; then
+     exec xmessage -center -buttons OK:0 -default OK "Sorry, $DESKTOP_SESSION is no valid session."
+ else
