@@ -24,9 +24,10 @@
 # YOUR DATA IS DESTROYED, YOUR HOUSE BURNS DOWN OR YOUR DOG RUNS OFF.
 
 PRGNAM=kwin
-VERSION=${VERSION:-5.10.3.1}
+VERSION=${VERSION:-5.10.4}
 BUILD=${BUILD:-1}
 TAG=${TAG:-_wls}
+NUMJOBS=${NUMJOBS:-"-j4"}
 
 if [ -z "$ARCH" ]; then
   case "$( uname -m )" in
@@ -61,16 +62,7 @@ mkdir -p $WRK $PKG $OUTPUT
 cd $WRK
 rm -rf $PRGNAM-$VERSION
 tar xvf $CWD/$PRGNAM-$VERSION.tar.?z*
-
 cd $PRGNAM-$VERSION
-
-# Trivial patch for testing the CK2 session controller interface
-# as a replacement for systemd-logind;
-# cat $CWD/patches/kwin_replace_logind_with_ck2.patch | patch -p1 --verbose
-
-# Workaround Qt regression no longer delivering events for the root window.
-# Fixed in kwin 5.10.3.
-cat $CWD/patches/kwin_qt59_rootwindow_events.patch | patch -p1 --verbose
 
 chown -R root:root .
 find . \
@@ -105,7 +97,7 @@ cd build
     -DQca-qt5_DIR=/usr/lib${LIBDIRSUFFIX}/cmake/Qca \
     .. || exit 1
 
-make || exit 1
+make $NUMJOBS || make || exit 1
 make DESTDIR=$PKG install || exit 1
 cd ..
 

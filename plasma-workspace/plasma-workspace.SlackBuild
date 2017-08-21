@@ -24,9 +24,10 @@
 # YOUR DATA IS DESTROYED, YOUR HOUSE BURNS DOWN OR YOUR DOG RUNS OFF.
 
 PRGNAM=plasma-workspace
-VERSION=${VERSION:-5.10.3}
+VERSION=${VERSION:-5.10.4}
 BUILD=${BUILD:-1}
 TAG=${TAG:-_wls}
+NUMJOBS=${NUMJOBS:-"-j4"}
 
 if [ -z "$ARCH" ]; then
   case "$( uname -m )" in
@@ -96,7 +97,7 @@ cd build
     -DQca-qt5_DIR=/usr/lib${LIBDIRSUFFIX}/cmake/Qca \
     || exit 1
 
-make || exit 1
+make ${NUMJOBS} || make || exit 1
 make DESTDIR=$PKG install || exit 1
 cd ..
 
