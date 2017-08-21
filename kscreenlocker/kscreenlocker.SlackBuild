@@ -1,8 +1,8 @@
 #!/bin/sh
 
-# Slackware build script for powerdevil
+# Slackware build script for kscreenlocker
 
-# Copyright 2015-2017  Widya Walesa <walecha99@gmail.com>
+# Copyright 2017  Widya Walesa <walecha99@gmail.com>
 # All rights reserved.
 #
 # Redistribution and use of this script, with or without modification, is
@@ -23,14 +23,11 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. FURTHERMORE I AM NOT LIABLE IF
 # YOUR DATA IS DESTROYED, YOUR HOUSE BURNS DOWN OR YOUR DOG RUNS OFF.
 
-PRGNAM=powerdevil
+PRGNAM=kscreenlocker
 VERSION=${VERSION:-5.10.4}
 BUILD=${BUILD:-1}
 TAG=${TAG:-_wls}
 NUMJOBS=${NUMJOBS:-"-j4"}
-
-# This build is using ELOGIND instead of consolekit2
-USE_CONSOLEKIT2=${USE_CONSOLEKIT2:-"NO"}
 
 if [ -z "$ARCH" ]; then
   case "$( uname -m )" in
@@ -58,7 +55,7 @@ CWD=$(pwd)
 WRK=${WRK:-/tmp/wlsbuild}
 PKG=$WRK/package-$PRGNAM
 OUTPUT=${OUTPUT:-/tmp}
-DOCS="AUTHORS COPYING* ChangeLog HACKING MAINTAINERS NEWS README"
+DOCS="COMPLIANCE CONFIGURING COPYING* HACKING README"
 
 rm -rf $PKG
 mkdir -p $WRK $PKG $OUTPUT
@@ -78,7 +75,7 @@ KDE_OPT_ARGS=" -Wno-dev -DBUILD_TESTING=OFF -DKDE4_BUILD_TESTS=OFF -DSITE=\"slac
 
 mkdir build
 cd build
-  cmake .. \
+  cmake \
     $KDE_OPT_ARGS \
     -DKDE_PLATFORM_FEATURE_DISABLE_DEPRECATED=TRUE \
     -DCMAKE_C_FLAGS:STRING="$SLKCFLAGS" \
@@ -97,37 +94,13 @@ cd build
     -DKDE_INSTALL_USE_QT_SYS_PATHS=ON \
     -DBUILD_TESTING=OFF \
     -DHAVE_SHADOW=TRUE \
+    -DPAM_REQUIRED=ON \
     -DQca-qt5_DIR=/usr/lib${LIBDIRSUFFIX}/cmake/Qca \
-    || exit 1
+    .. || exit 1
 
 make $NUMJOBS || make || exit 1
 make DESTDIR=$PKG install || exit 1
 cd ..
-
-# Move the polkit dbus configuration files to the proper place:
-mkdir -p $PKG/etc
-mv $PKG/etc/kde/dbus-1 $PKG/etc/
-
-mkdir -p $PKG/etc/polkit-1/rules.d
-mkdir -p $PKG/etc/polkit-1/localauthority/50-local.d
-chmod 700 $PKG/etc/polkit-1/localauthority
-
-if [ "$USE_CONSOLEKIT2" == "YES" ]; then
-    # Add polkit policy file that brings back suspend/hibernate options:
-    install -m 0644 -o root \
-        $CWD/patches/10-enable-suspend.rules \
-        $PKG/etc/polkit-1/rules.d/10-enable-suspend.rules.new
-    install -m 0660 -o root \
-        $CWD/patches/30-org.freedesktop.upower.pkla \
-        $PKG/etc/polkit-1/localauthority/50-local.d/30-org.freedesktop.upower.pkla.new
-    # Add polkit policy files that bring back shutdown/reboot:
-    install -m 0660 -o root \
-        $CWD/patches/40-org.freedesktop.consolekit.system.stop-multiple-users.pkla \
-        $PKG/etc/polkit-1/localauthority/50-local.d/40-org.freedesktop.consolekit.system.stop-multiple-users.pkla.new
-    install -m 0660 -o root \
-        $CWD/patches/41-org.freedesktop.consolekit.system.restart-multiple-users.pkla \
-        $PKG/etc/polkit-1/localauthority/50-local.d/41-org.freedesktop.consolekit.system.restart-multiple-users.pkla.new
-fi
 
 find $PKG | xargs file | grep -e "executable" -e "shared object" | grep ELF \
   | cut -f 1 -d : | xargs strip --strip-unneeded 2> /dev/null || true
