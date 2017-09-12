@@ -16,9 +16,9 @@
 
 # The systemd/elogind state directory:
 if [ ! -d /run/systemd ]; then
-  mkdir -p /run/systemd
-  chmod 0755 /run/systemd
-  ( cd /run; ln -s systemd elogind; )
+  mkdir -p /run/elogind
+  chmod 0755 /run/elogind
+  ( cd /run; ln -s elogind systemd; )
 fi
 
 # Toplevel directory for runtime user session data:
@@ -32,16 +32,12 @@ fi
 # ("subsystem") so we must create it manually:
 if [ ! -d /sys/fs/cgroup/elogind ]; then
   mkdir -p /sys/fs/cgroup/elogind
-  ( cd /sys/fs/cgroup; ln -s elogind systemd; )
-  sleep 1
-fi
-
-if ! df /sys/fs/cgroup/elogind | grep -q elogind >/dev/null; then
   mount -t cgroup -o none,name=elogind elogind /sys/fs/cgroup/elogind
+  ( cd /sys/fs/cgroup; rm -f systemd; ln -s elogind systemd; )
 fi
 
 if [ -x /usr/libexec/elogind/elogind ]; then
-    echo -n "Starting up elogind: "
+    echo -n "Start elogind: "
     /usr/libexec/elogind/elogind &
     echo "/usr/libexec/elogind/elogind &"
 fi
